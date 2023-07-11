@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 TO_MIN_BY_TRAIN = 60 / 30
 CHANGE_LINE_MIN = 4
 
-class TrainSystem:
+class SubwaySystem:
     def __init__(self):
         self.edge_distances = pd.read_csv("edge_distances.csv").fillna(float("inf"))
         self.edge_weights = self.edge_distances.to_numpy() * TO_MIN_BY_TRAIN
@@ -79,8 +79,15 @@ class StationViz:
 
     def __str__(self):
         return f"{self.color_mapping[self.line]}E{self.number}{self.ENDC}"
+    
+def print_frontier(frontier):
+    print("\t Fronteira - [", end="")
+    for station, priority in frontier.elements.items():
+        print(StationViz(*station), end=": ")
+        print(priority, end=", ")
+    print("]")
 
-def search(graph, start, goal):
+def search(subway_system, start, goal):
     precedents = {start: None}
     minutes_since_start = {start: 0}
     
@@ -88,8 +95,6 @@ def search(graph, start, goal):
     frontier.push(start, 0)
     
     while len(frontier.elements) > 0:
-        print(f"Fronteira: \n-", frontier.elements)
-        
         current = frontier.pop()
         print(f"Estação atual: ", StationViz(*current), sep="")
         
@@ -97,12 +102,12 @@ def search(graph, start, goal):
             print(f"Rota encontrada!!!")
             break
         
-        current_lines = graph.get_lines(current[0])
+        current_lines = subway_system.get_lines(current[0])
         
-        for neighbor in graph.get_neighbors(current[0]):
-            elapsed_time = minutes_since_start[current] + graph.get_edge(current[0], neighbor)
+        for neighbor in subway_system.get_neighbors(current[0]):
+            elapsed_time = minutes_since_start[current] + subway_system.get_edge(current[0], neighbor)
             
-            nb_lines = graph.get_lines(neighbor)
+            nb_lines = subway_system.get_lines(neighbor)
             if current[1] not in nb_lines:
                 elapsed_time += CHANGE_LINE_MIN
                 for line in current_lines:
@@ -114,9 +119,10 @@ def search(graph, start, goal):
             neighbor = (neighbor, neighbor_line)
             if neighbor not in minutes_since_start or elapsed_time < minutes_since_start[neighbor]:
                 minutes_since_start[neighbor] = elapsed_time
-                frontier.push(neighbor, elapsed_time + graph.get_ETA_goal(neighbor[0], goal[0]))
+                frontier.push(neighbor, elapsed_time + subway_system.get_ETA_goal(neighbor[0], goal[0]))
                 precedents[neighbor] = current
-    
+        print_frontier(frontier)
+        
     return precedents, minutes_since_start
 
 def route_from_precedents(start, goal, precedents, times):
@@ -132,9 +138,23 @@ def route_from_precedents(start, goal, precedents, times):
     return route, np.round(times[goal], 5)
 
 if __name__ == "__main__":
-    ts = TrainSystem()
-    S, F = (6, "blue"), (13, "green")
-    precedents, elapsed_times = search(ts, S, F)
+    ss = SubwaySystem()
+    
+    st_number = int(input("Enter start station number: "))
+    st_line = (input("Enter start station line: "))
+    assert st_number in range(1, 14 + 1), f"Station out of range. Got {st_number}"
+    assert st_line in ss.get_lines(st_number), f"Invalid line. Got {st_number} {st_line}"
+    S = (st_number, st_line)
+    
+    dst_number = int(input("Enter destination station number: "))
+    dst_line = (input("Enter destination station line: "))
+    assert dst_number in range(1, 14 + 1), f"Station out of range. Got {dst_number}"
+    assert dst_line in ss.get_lines(dst_number), f"Invalid line. Got {dst_number} {dst_line}"
+    F = (dst_number, dst_line)
+
+    print("\n", "-" * 35, "\n")
+    
+    precedents, elapsed_times = search(ss, S, F)
     route, final_ETA = route_from_precedents(S, F, precedents, elapsed_times)
     
     # Print route and ETA
