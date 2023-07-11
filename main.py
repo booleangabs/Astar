@@ -64,7 +64,7 @@ class PriorityQueue:
         del self.elements[top]
         return top
     
-class Station:
+class StationViz:
     color_mapping = {
         "blue": '\033[94m',
         "green": '\033[92m',
@@ -78,7 +78,7 @@ class Station:
         self.line = line
 
     def __str__(self):
-        return f"{self.color_mapping[self.line]}{self.number}{self.ENDC}"
+        return f"{self.color_mapping[self.line]}E{self.number}{self.ENDC}"
 
 def search(graph, start, goal):
     precedents = {start: None}
@@ -88,17 +88,33 @@ def search(graph, start, goal):
     frontier.push(start, 0)
     
     while len(frontier.elements) > 0:
-        print(frontier.elements)
-        current = frontier.pop()
+        print(f"Fronteira: \n-", frontier.elements)
         
-        if current == goal:
+        current = frontier.pop()
+        print(f"Estação atual: ", StationViz(*current), sep="")
+        
+        if current[0] == goal[0]:
+            print(f"Rota encontrada!!!")
             break
         
-        for neighbor in graph.get_neighbors(current):
-            elapsed_time = minutes_since_start[current] + graph.get_edge(current, neighbor)
+        current_lines = graph.get_lines(current[0])
+        
+        for neighbor in graph.get_neighbors(current[0]):
+            elapsed_time = minutes_since_start[current] + graph.get_edge(current[0], neighbor)
+            
+            nb_lines = graph.get_lines(neighbor)
+            if current[1] not in nb_lines:
+                elapsed_time += CHANGE_LINE_MIN
+                for line in current_lines:
+                    if line in nb_lines:
+                        neighbor_line = line
+            else:
+                neighbor_line = current[1]
+            
+            neighbor = (neighbor, neighbor_line)
             if neighbor not in minutes_since_start or elapsed_time < minutes_since_start[neighbor]:
                 minutes_since_start[neighbor] = elapsed_time
-                frontier.push(neighbor, elapsed_time + graph.get_ETA_goal(neighbor, goal))
+                frontier.push(neighbor, elapsed_time + graph.get_ETA_goal(neighbor[0], goal[0]))
                 precedents[neighbor] = current
     
     return precedents, minutes_since_start
@@ -117,8 +133,17 @@ def route_from_precedents(start, goal, precedents, times):
 
 if __name__ == "__main__":
     ts = TrainSystem()
-    S, F = 1, 14
+    S, F = (6, "blue"), (13, "green")
     precedents, elapsed_times = search(ts, S, F)
     route, final_ETA = route_from_precedents(S, F, precedents, elapsed_times)
-    print(route)
-    print(final_ETA)
+    
+    # Print route and ETA
+    print()
+    print(f"Caminho final:")
+    print("\t", end="")
+    for i in range(len(route[:-1])):
+        print(StationViz(*route[i]), end=" -> ")
+        if route[i][1] != route[i + 1][1]:
+            print(StationViz(route[i][0], route[i + 1][1]), end=" -> ")
+    print(StationViz(*route[-1]))
+    print(f"Tempo estimado (min): {final_ETA}")
